@@ -23,6 +23,7 @@ import time
 from oslo_concurrency import processutils
 from oslo_log import log
 
+from ironic_python_agent.common import metrics
 from ironic_python_agent import errors
 from ironic_python_agent.extensions import base
 from ironic_python_agent import hardware
@@ -221,8 +222,16 @@ class StandbyExtension(base.BaseAgentExtension):
         self.cached_image_id = None
 
     def _cache_and_write_image(self, image_info, device):
-        _download_image(image_info)
-        _write_image(image_info, device)
+        with metrics.instrument_context(__name__,
+                                        'cache_image',
+                                        '_download_image'):
+            _download_image(image_info)
+
+        with metrics.instrument_context(__name__,
+                                        'cache_image',
+                                        '_download_image'):
+            _write_image(image_info, device)
+
         self.cached_image_id = image_info['id']
 
     def _stream_raw_image_onto_device(self, image_info, device):
@@ -245,6 +254,7 @@ class StandbyExtension(base.BaseAgentExtension):
         _verify_image(image_info, device, image_download.md5sum())
 
     @base.async_command('cache_image', _validate_image_info)
+    @metrics.instrument(__name__, 'cache_image')
     def cache_image(self, image_info=None, force=False):
         LOG.debug('Caching image %s', image_info['id'])
         device = hardware.dispatch_to_managers('get_os_install_device')
@@ -262,6 +272,7 @@ class StandbyExtension(base.BaseAgentExtension):
         return msg
 
     @base.async_command('prepare_image', _validate_image_info)
+    @metrics.instrument(__name__, 'prepare_image')
     def prepare_image(self,
                       image_info=None,
                       configdrive=None):
@@ -272,7 +283,6 @@ class StandbyExtension(base.BaseAgentExtension):
         stream_raw_images = image_info.get('stream_raw_images', False)
         # don't write image again if already cached
         if self.cached_image_id != image_info['id']:
-
             if self.cached_image_id is not None:
                 LOG.debug('Already had %s cached, overwriting',
                           self.cached_image_id)
@@ -283,7 +293,10 @@ class StandbyExtension(base.BaseAgentExtension):
                 self._cache_and_write_image(image_info, device)
 
         if configdrive is not None:
-            _write_configdrive_to_partition(configdrive, device)
+            with metrics.instrument_context(
+                    __name__, 'prepare_image',
+                    '_write_configdrive_to_partition'):
+                _write_configdrive_to_partition(configdrive, device)
 
         msg = ('image ({0}) written to device {1}'.format(
             image_info['id'], device))
