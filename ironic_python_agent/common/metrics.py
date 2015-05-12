@@ -22,8 +22,7 @@ import time
 import contextlib
 import functools
 from oslo.config import cfg
-
-from ironic_python_agent.openstack.common import log
+from oslo_log import log
 
 metrics_opts = [
     cfg.StrOpt('backend',
