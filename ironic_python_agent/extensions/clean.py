@@ -35,12 +35,13 @@ class CleanExtension(base.BaseAgentExtension):
         LOG.debug('Getting clean steps, called with node: %(node)s, '
                   'ports: %(ports)s', {'node': node, 'ports': ports})
         # Results should be a dict, not a list
-        steps = hardware.dispatch_to_all_managers('get_clean_steps',
-                                                  node, ports)
+        candidate_steps = hardware.dispatch_to_all_managers('get_clean_steps',
+                                                            node, ports)
+        clean_steps = _deduplicate_steps(candidate_steps)
 
-        LOG.debug('Returning clean steps: %s', steps)
+        LOG.debug('Returning clean steps: %s', clean_steps)
         return {
-            'clean_steps': steps,
+            'clean_steps': clean_steps,
             'hardware_manager_version': _get_current_clean_version()
         }
 
@@ -88,6 +89,74 @@ class CleanExtension(base.BaseAgentExtension):
             'clean_result': result,
             'clean_step': step
         }
+
+
+def _deduplicate_steps(candidate_steps):
+    """Remove duplicated clean steps
+
+    Decides priority of duplicated steps by choosing the step from the
+    hardware manager with the highest hardware support level, with
+    the larger priority being the tie breaker.
+
+    :param candidate_steps: A dict containing all possible clean steps from
+        all managers, key=manager, value=list of clean steps
+    :returns: A deduplicated dictionary of {hardware_manager:
+        [clean-steps]}
+    """
+    support = hardware.dispatch_to_all_managers(
+        'evaluate_hardware_support')
+
+    deduped_steps = {}
+    for manager, manager_steps in candidate_steps.items():
+        # We cannot deduplicate steps with unknown hardware support
+        if manager not in support:
+            LOG.warning('Unknown hardware support for %(manager)s, '
+                        'dropping clean steps: %(steps)s',
+                        {'manager': manager, 'steps': manager_steps})
+            continue
+        for step in manager_steps:
+            existing_step = deduped_steps.get(step['step'])
+            if not existing_step:
+                # No other manager has this step, add it.
+                deduped_steps[step['step']] = {
+                    'manager': manager, 'step': step}
+                continue
+
+            # Duplicated step, compare hardware support and priority
+            existing_support = support[existing_step['manager']]
+            if support[manager] > existing_support:
+                # Higher hardware support, use this new step
+                LOG.debug('Dropping lower support level, duplicated clean '
+                          'step: %s', )
+                deduped_steps[step['step']] = {
+                    'manager': manager, 'step': step}
+            elif (support[manager] == existing_support and
+                  step['priority'] > existing_step['step']['priority']):
+                # Equal hardware support, use the higher priority
+                LOG.debug('Dropping lower priority, duplicated clean '
+                          'step: %s', existing_step)
+                deduped_steps[step['step']] = {
+                    'manager': manager, 'step': step}
+            # Use ABC order of HardwareManager name as "tie breaker" in case of
+            # identical step, priority, and hardware support. This will not
+            # impact behavior of cleaning, but instead ensure duplicated steps
+            # are always returned as a member of the same HardwareManager.
+            elif manager < existing_step['manager']:
+                LOG.debug('Duplicate steps found: using ABC order of '
+                          'HardwareManager name as tie breaker, dropping '
+                          'clean step: %s', existing_step)
+                deduped_steps[step['step']] = {
+                    'mananger': manager, 'step': step}
+            else:
+                LOG.debug('Not adding duplicated clean step: %s', step)
+
+    # Build the deduplicated clean_steps dictionary in the format
+    # {manager_name: [step1, step2..]}
+    clean_steps = {}
+    for step in deduped_steps.values():
+        clean_steps.setdefault(step['manager'], []).append(step['step'])
+
+    return clean_steps
 
 
 def _check_clean_version(clean_version=None):
