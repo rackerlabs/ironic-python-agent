@@ -269,7 +269,7 @@ class HardwareManager(object):
     def get_clean_steps(self, node, ports):
         """Get a list of clean steps with priority.
 
-        Returns a list of steps. Each step is represeted by a dict::
+        Returns a list of steps. Each step is represented by a dict::
 
           {
            'step': the HardwareManager function to call.
@@ -289,8 +289,10 @@ class HardwareManager(object):
                         parameter, Ironic will consider False (non-abortable).
           }
 
-        If multiple hardware managers return the same step name, the priority
-        of the step will be the largest priority of steps with the same name.
+        If multiple hardware managers return the same step name, the largest
+        hardware support value, then largest priority will be used as the
+        tie-breaker.
+
         The steps will be called using `hardware.dispatch_to_managers` and
         handled by the best suited hardware manager. If you need a step to be
         executed by only your hardware manager, ensure it has a unique step
