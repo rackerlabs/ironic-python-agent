@@ -60,20 +60,54 @@ class TestCleanExtension(test_base.BaseTestCase):
                     'priority': 30,
                     'interface': 'deploy',
                     'reboot_requested': False
+                },
+                {
+                    'step': 'erase_devices',
+                    'priority': 40,
+                    'interface': 'deploy',
+                    'reboot_requested': False
+                },
+            ]
+        }
+
+        expected_steps = {
+            'SpecificHardwareManager': [
+                {
+                    'step': 'upgrade_bios',
+                    'priority': 20,
+                    'interface': 'deploy',
+                    'reboot_requested': True
                 }
+            ],
+            'FirmwareHardwareManager': [
+                {
+                    'step': 'upgrade_firmware',
+                    'priority': 30,
+                    'interface': 'deploy',
+                    'reboot_requested': False
+                },
+                {
+                    'step': 'erase_devices',
+                    'priority': 40,
+                    'interface': 'deploy',
+                    'reboot_requested': False
+                },
             ]
         }
 
         mock_dispatch.return_value = manager_steps
         expected_return = {
             'hardware_manager_version': self.version,
-            'clean_steps': manager_steps
+            'clean_steps': expected_steps
         }
 
         async_results = self.agent_extension.get_clean_steps(node=self.node,
                                                              ports=self.ports)
 
-        self.assertEqual(expected_return, async_results.join().command_result)
+        # Ordering of the clean steps doesn't matter; they're sorted by
+        # 'priority' in Ironic
+        self.assertItemsEqual(expected_return,
+                              async_results.join().command_result)
 
     @mock.patch('ironic_python_agent.hardware.dispatch_to_managers')
     @mock.patch('ironic_python_agent.extensions.clean._check_clean_version')

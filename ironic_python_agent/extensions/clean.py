@@ -12,9 +12,14 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from oslo_log import log
+
 from ironic_python_agent import errors
 from ironic_python_agent.extensions import base
 from ironic_python_agent import hardware
+
+
+LOG = log.getLogger()
 
 
 class CleanExtension(base.BaseAgentExtension):
@@ -29,11 +34,36 @@ class CleanExtension(base.BaseAgentExtension):
             reboot_requested
         """
         # Results should be a dict, not a list
-        steps = hardware.dispatch_to_all_managers('get_clean_steps',
-                                                  node, ports)
+        candidate_steps = hardware.dispatch_to_all_managers('get_clean_steps',
+                                                            node, ports)
+
+        # Remove duplicates. Highest priority step wins, others are removed
+        deduped_steps = {}
+        for manager, manager_steps in candidate_steps.items():
+            for step in manager_steps:
+                # Check if step is already in deduped steps or if this
+                # step has a high priority
+                deduped_step = deduped_steps.get(step['step'])
+                if (deduped_step is None or
+                        step['priority'] > deduped_step['step']['priority']):
+                    # Save the step and which manager it belongs to
+                    deduped_steps[step['step']] = {
+                        'manager': manager, 'step': step}
+                elif deduped_step is not None:
+                    LOG.debug('Dropping lower priority, duplicated clean '
+                              'step: %s', deduped_step)
+
+        # Initialize the clean_steps dictionary to return with the list of
+        # manager names and empty array for steps
+        clean_steps = {manager: [] for manager in candidate_steps.keys()}
+
+        # Build the deduplicated clean_steps dictionary in the format
+        # {manager_name: [step1, step2..]}
+        for step in deduped_steps.values():
+            clean_steps[step['manager']].append(step['step'])
 
         return {
-            'clean_steps': steps,
+            'clean_steps': clean_steps,
             'hardware_manager_version': _get_current_clean_version()
         }
 
