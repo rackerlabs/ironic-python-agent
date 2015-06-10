@@ -209,6 +209,7 @@ class StandbyExtension(base.BaseAgentExtension):
     @base.async_command('cache_image', _validate_image_info)
     @metrics.instrument(__name__, 'cache_image')
     def cache_image(self, image_info=None, force=False):
+        LOG.debug('Caching image %s', image_info['id'])
         device = hardware.dispatch_to_managers('get_os_install_device')
 
         result_msg = 'image ({0}) already present on device {1}'
@@ -217,6 +218,8 @@ class StandbyExtension(base.BaseAgentExtension):
             with metrics.instrument_context(__name__,
                                             'cache_image',
                                             '_download_image'):
+                LOG.debug('Already had %s cached, overwriting',
+                          self.cached_image_id)
                 _download_image(image_info)
             with metrics.instrument_context(__name__,
                                             'cache_image',
@@ -225,17 +228,21 @@ class StandbyExtension(base.BaseAgentExtension):
             self.cached_image_id = image_info['id']
             result_msg = 'image ({0}) cached to device {1}'
 
-        return result_msg.format(image_info['id'], device)
+        msg = result_msg.format(image_info['id'], device)
+        LOG.info(msg)
+        return msg
 
     @base.async_command('prepare_image', _validate_image_info)
     @metrics.instrument(__name__, 'prepare_image')
     def prepare_image(self,
                       image_info=None,
                       configdrive=None):
+        LOG.debug('Preparing image %s', image_info['id'])
         device = hardware.dispatch_to_managers('get_os_install_device')
 
         # don't write image again if already cached
         if self.cached_image_id != image_info['id']:
+<<<<<<< HEAD
             with metrics.instrument_context(__name__,
                                             'prepare_image',
                                             '_download_image'):
@@ -244,6 +251,12 @@ class StandbyExtension(base.BaseAgentExtension):
                                             'prepare_image',
                                             '_write_image'):
                 _write_image(image_info, device)
+=======
+            LOG.debug('Already had %s cached, overwriting',
+                      self.cached_image_id)
+            _download_image(image_info)
+            _write_image(image_info, device)
+>>>>>>> 59281ec... Improve IPA logging and exception handling
             self.cached_image_id = image_info['id']
 
         if configdrive is not None:
@@ -252,8 +265,10 @@ class StandbyExtension(base.BaseAgentExtension):
                     '_write_configdrive_to_partition'):
                 _write_configdrive_to_partition(configdrive, device)
 
-        return 'image ({0}) written to device {1}'.format(image_info['id'],
-                                                          device)
+        msg = ('image ({0}) written to device {1}'.format(
+            image_info['id'], device))
+        LOG.info(msg)
+        return msg
 
     def _run_shutdown_script(self, parameter):
         script = _path_to_script('shell/shutdown.sh')
