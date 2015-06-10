@@ -21,9 +21,6 @@ from ironic_python_agent import hardware
 LOG = log.getLogger()
 
 
-LOG = log.getLogger()
-
-
 class CleanExtension(base.BaseAgentExtension):
     @base.sync_command('get_clean_steps')
     def get_clean_steps(self, node, ports):

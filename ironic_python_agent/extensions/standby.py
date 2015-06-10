@@ -242,21 +242,18 @@ class StandbyExtension(base.BaseAgentExtension):
 
         # don't write image again if already cached
         if self.cached_image_id != image_info['id']:
-<<<<<<< HEAD
             with metrics.instrument_context(__name__,
                                             'prepare_image',
                                             '_download_image'):
+                LOG.debug('Already had %s cached, overwriting',
+                          self.cached_image_id)
                 _download_image(image_info)
             with metrics.instrument_context(__name__,
                                             'prepare_image',
                                             '_write_image'):
                 _write_image(image_info, device)
-=======
-            LOG.debug('Already had %s cached, overwriting',
-                      self.cached_image_id)
             _download_image(image_info)
             _write_image(image_info, device)
->>>>>>> 59281ec... Improve IPA logging and exception handling
             self.cached_image_id = image_info['id']
 
         if configdrive is not None:
