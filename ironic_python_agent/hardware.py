@@ -34,6 +34,43 @@ _global_managers = None
 LOG = log.getLogger()
 
 
+def _list_block_devices():
+    """List all physical block devices
+
+    The switches we use for lsblk: P for KEY="value" output,
+    b for size output in bytes, d to exclude dependant devices
+    (like md or dm devices), i to ensure ascii characters only,
+    and  o to specify the fields we need
+
+    :return: A list of BlockDevices
+    """
+    report = utils.execute('lsblk', '-PbdioKNAME,MODEL,SIZE,ROTA,TYPE',
+                           check_exit_code=[0])[0]
+    lines = report.split('\n')
+
+    devices = []
+    for line in lines:
+        device = {}
+        # Split into KEY=VAL pairs
+        vals = shlex.split(line)
+        for key, val in (v.split('=', 1) for v in vals):
+            device[key] = val.strip()
+        # Ignore non disk
+        if device.get('TYPE') != 'disk':
+            continue
+
+        # Ensure all required keys are at least present, even if blank
+        diff = set(['KNAME', 'MODEL', 'SIZE', 'ROTA']) - set(device.keys())
+        if diff:
+            raise errors.BlockDeviceError(
+                '%s must be returned by lsblk.' % diff)
+        devices.append(BlockDevice(name='/dev/' + device['KNAME'],
+                                   model=device['MODEL'],
+                                   size=int(device['SIZE']),
+                                   rotational=bool(int(device['ROTA']))))
+    return devices
+
+
 class HardwareSupport(object):
     """Example priorities for hardware managers.
 
@@ -300,40 +337,7 @@ class GenericHardwareManager(HardwareManager):
             return Memory(int(psutil.phymem_usage().total))
 
     def list_block_devices(self):
-        """List all physical block devices
-
-        The switches we use for lsblk: P for KEY="value" output,
-        b for size output in bytes, d to exclude dependant devices
-        (like md or dm devices), i to ensure ascii characters only,
-        and  o to specify the fields we need
-
-        :return: A list of BlockDevices
-        """
-        report = utils.execute('lsblk', '-PbdioKNAME,MODEL,SIZE,ROTA,TYPE',
-                               check_exit_code=[0])[0]
-        lines = report.split('\n')
-
-        devices = []
-        for line in lines:
-            device = {}
-            # Split into KEY=VAL pairs
-            vals = shlex.split(line)
-            for key, val in (v.split('=', 1) for v in vals):
-                device[key] = val.strip()
-            # Ignore non disk
-            if device.get('TYPE') != 'disk':
-                continue
-
-            # Ensure all required keys are at least present, even if blank
-            diff = set(['KNAME', 'MODEL', 'SIZE', 'ROTA']) - set(device.keys())
-            if diff:
-                raise errors.BlockDeviceError(
-                    '%s must be returned by lsblk.' % diff)
-            devices.append(BlockDevice(name='/dev/' + device['KNAME'],
-                                       model=device['MODEL'],
-                                       size=int(device['SIZE']),
-                                       rotational=bool(int(device['ROTA']))))
-        return devices
+        return _list_block_devices()
 
     def _get_device_vendor(self, dev):
         """Get the vendor name of a given device."""
