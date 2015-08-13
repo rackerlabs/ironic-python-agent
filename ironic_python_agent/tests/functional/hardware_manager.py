@@ -14,6 +14,7 @@
 
 import logging
 import multiprocessing
+import time
 
 from oslotest import base as test_base
 import requests
@@ -32,8 +33,17 @@ class TestHWMFunctionality(test_base.BaseTestCase):
         self.process = multiprocessing.Process(
             target=agentpy.run)
         self.process.start()
+
+        # Wait for process to start, otherwise we have a race for tests
+        tries = 0
+        while tries < 20:
+            response = requests.get('http://localhost:9999/v1/commands')
+            if response.status_code == 200:
+                return
+            time.sleep(.1)
+            tries += 1
+        raise IOError('Agent did not start after 2 seconds.')
         # print(self.process.join())
-        # time.sleep(10)
 
     def test_empty_commands(self):
         commands = requests.get('http://localhost:9999/v1/commands')
@@ -42,4 +52,4 @@ class TestHWMFunctionality(test_base.BaseTestCase):
 
     def tearDown(self):
         super(TestHWMFunctionality, self).tearDown()
-        # self.process.terminate()
+        self.process.terminate()
