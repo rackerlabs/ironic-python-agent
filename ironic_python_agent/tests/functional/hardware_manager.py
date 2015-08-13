@@ -12,26 +12,37 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from multiprocessing import Process
+
 from oslotest import base as test_base
+import requests
+
+from ironic_python_agent import agent
+
 
 class TestHWMFunctionality(test_base.BaseTestCase):
 
     def setUp(self):
-        super(TestHardwareManagerFunctionality, self).setUp()
-        # TODO Actually spin up the agent here, with one hardware manager, as a
-        # subprocess. Wait until it starts.
+        super(TestHWMFunctionality, self).setUp()
+        self.process = Process(target=agent.IronicPythonAgent, kwargs={
+            'api_url': 'localhost',
+            'advertise_address': 'localhost',
+            'listen_address': ('localhost', 9999),
+            'ip_lookup_attempts': 1,
+            'ip_lookup_sleep': 1,
+            'network_interface': 'eth0',
+            'lookup_timeout': '60',
+            'lookup_interval': '15',
+            'driver_name': 'agent',
+            'standalone': True
+        })
+        self.process.start()
+
+    def test_empty_commands(self):
+        commands = requests.get('http://localhost:9999/v1/commands')
+        self.assertEqual(200, commands.status_code)
+        self.assertEqual({'commands': []}, commands.json())
 
     def tearDown(self):
-        # TODO Kill agent process
-
-# Overwrite base class to run same test suite with multiple managers, plus some
-# additional ones
-class TestHWMFunctionalityMultipleManagers(TestHardwareManagerFunctionality):
-
-    def setUp(self):
-        # TODO Actually spin up the agent here, with multiple hardware managers, as
-        # a subprocess. Wait until it starts.
-
-    def tearDown(self):
-        # TODO Kill agent process
-
+        super(TestHWMFunctionality, self).tearDown()
+        self.process.terminate()
