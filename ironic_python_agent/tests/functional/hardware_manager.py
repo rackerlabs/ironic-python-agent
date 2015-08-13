@@ -37,11 +37,12 @@ class TestHWMFunctionality(test_base.BaseTestCase):
         # Wait for process to start, otherwise we have a race for tests
         tries = 0
         while tries < 20:
-            response = requests.get('http://localhost:9999/v1/commands')
-            if response.status_code == 200:
-                return
-            time.sleep(.1)
-            tries += 1
+            try:
+                return requests.get('http://localhost:9999/v1/commands')
+            except requests.ConnectionError:
+                time.sleep(.1)
+                tries += 1
+
         raise IOError('Agent did not start after 2 seconds.')
         # print(self.process.join())
 
