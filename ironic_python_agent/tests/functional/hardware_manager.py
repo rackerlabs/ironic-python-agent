@@ -12,7 +12,8 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-from multiprocessing import Process
+import logging
+import multiprocessing
 
 from oslotest import base as test_base
 import requests
@@ -21,22 +22,18 @@ from ironic_python_agent import agent
 
 
 class TestHWMFunctionality(test_base.BaseTestCase):
-
     def setUp(self):
         super(TestHWMFunctionality, self).setUp()
-        self.process = Process(target=agent.IronicPythonAgent, kwargs={
-            'api_url': 'localhost',
-            'advertise_address': 'localhost',
-            'listen_address': ('localhost', 9999),
-            'ip_lookup_attempts': 1,
-            'ip_lookup_sleep': 1,
-            'network_interface': 'eth0',
-            'lookup_timeout': '60',
-            'lookup_interval': '15',
-            'driver_name': 'agent',
-            'standalone': True
-        })
+        mpl = multiprocessing.log_to_stderr()
+        mpl.setLevel(logging.INFO)
+        agentpy = agent.IronicPythonAgent(
+            'http://127.0.0.1:6835', 'localhost', ('0.0.0.0', 9999), 3, 10,
+            None, 300, 1, 'agent_ipmitool', True)
+        self.process = multiprocessing.Process(
+            target=agentpy.run)
         self.process.start()
+        # print(self.process.join())
+        # time.sleep(10)
 
     def test_empty_commands(self):
         commands = requests.get('http://localhost:9999/v1/commands')
@@ -45,4 +42,4 @@ class TestHWMFunctionality(test_base.BaseTestCase):
 
     def tearDown(self):
         super(TestHWMFunctionality, self).tearDown()
-        self.process.terminate()
+        # self.process.terminate()
