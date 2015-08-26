@@ -158,8 +158,7 @@ def _download_image(image_info):
     LOG.info("Image downloaded from {0} in {1} seconds".format(image_location,
                                                                totaltime))
 
-    if not _verify_image(image_info, image_location):
-        raise errors.ImageChecksumError(image_info['id'])
+    _verify_image(image_info, image_location)
 
 
 def _verify_image(image_info, image_location):
@@ -176,10 +175,12 @@ def _verify_image(image_info, image_location):
     hash_digest = hash_.hexdigest()
     if hash_digest == checksum:
         return True
-    log_msg = ('Image verification failed. Location: {0};'
-               'image hash: {1}; verification hash: {2}')
-    LOG.warning(log_msg.format(image_location, checksum, hash_digest))
-    return False
+    log_msg = ('Image verification failed. Location: {0}; Image ID: {1}'
+               'image hash: {2}; verification hash: {3}'.format(
+               image_location, image_info['id'], checksum, hash_digest))
+    LOG.warning(log_msg)
+    raise errors.ImageChecksumError(image_location, image_info['id'], checksum,
+                                    hash_digest)
 
 
 def _validate_image_info(ext, image_info=None, **kwargs):
