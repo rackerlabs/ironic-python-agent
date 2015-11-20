@@ -5,6 +5,10 @@ FROM debian:jessie
 # different it will not cache this layer
 ADD . /tmp/ironic-python-agent
 
+# Add 'testing' for qemu-utils
+RUN echo 'APT::Default-Release "jessie";' > /etc/apt/apt.conf.d/10default && \
+    sed -e 's/jessie/testing/g' /etc/apt/sources.list > /etc/apt/sources.list.d/testing.list
+
 # Install requirements: Python for ironic-python-agent, others for putting an
 # image on disk
 RUN apt-get update && \
